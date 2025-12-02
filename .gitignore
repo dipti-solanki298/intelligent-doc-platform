@@ -1,0 +1,93 @@
+############################
+# GLOBAL
+############################
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Ignore all markdown files except README.md
+*.md
+!README.md
+
+############################
+# FRONTEND (React)
+############################
+
+# Dependencies
+frontend/node_modules/
+
+# Build output
+frontend/build/
+frontend/dist/
+frontend/out/
+
+# Local environment
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Cache
+frontend/.cache/
+frontend/parcel-cache/
+frontend/.eslintcache
+frontend/coverage/
+
+############################
+# BACKEND (FastAPI - Python)
+############################
+
+# Virtual environment
+backend/IDP Platform/venv/
+backend/IDP Platform/.venv/
+
+# Python caches
+backend/IDP Platform/__pycache__/
+backend/IDP Platform/*.py[cod]
+backend/IDP Platform/.pytest_cache/
+backend/IDP Platform/.mypy_cache/
+backend/IDP Platform/.ruff_cache/
+
+# Environment & config
+backend/IDP Platform/.env
+backend/IDP Platform/.env.*
+
+# Build output
+backend/IDP Platform/build/
+backend/IDP Platform/dist/
+
+# Logs
+backend/IDP Platform/logs/
+*.log
+
+# Database
+backend/IDP Platform/*.db
+backend/IDP Platform/*.sqlite3
+
+############################
+# DOCKER (optional)
+############################
+*.pid
+*.pid.lock
+
+############################
+# PACKAGE LOCKS (optional choice)
+############################
+# If you're using only **npm**, keep package-lock and ignore yarn.lock
+# If you're using only **yarn**, keep yarn.lock and ignore package-lock
+
+# Uncomment one strategy:
+# package-lock.json
+# yarn.lock

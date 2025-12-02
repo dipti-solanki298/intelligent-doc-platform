@@ -1,0 +1,17 @@
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.6.0
+python-multipart==0.0.9
+sqlalchemy==2.0.25
+alembic==1.13.1
+openai==1.10.0
+langchain==0.1
+motor
+pymupdf
+python-docx
+pytesseract
+Pillow
+openai
+aiohttp
+chromadb
+sentence-transformers
