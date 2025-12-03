@@ -781,4 +781,107 @@ export const handlers = [
         documentSpecs.splice(specIndex, 1);
         return HttpResponse.json({ message: 'Document spec deleted successfully' });
     }),
+
+    // ==================== PLAYGROUND ENDPOINTS ====================
+
+    // Playground - Upload and Extract (combined endpoint)
+    http.post('/api/playground/extract', async ({ request }) => {
+        await delay(2500); // Longer delay to simulate upload + extraction
+
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader || !currentToken) {
+            return HttpResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+
+        const formData = await request.formData();
+        const project_id = formData.get('project_id') as string;
+        const document_type = formData.get('document_type') as string;
+        const file = formData.get('file') as File;
+
+        if (!project_id || !file) {
+            return HttpResponse.json(
+                { error: 'Missing required fields: project_id and file are required' },
+                { status: 400 }
+            );
+        }
+
+        // Find project to get schema
+        const project = projects.find((p) => p.id === project_id);
+        if (!project) {
+            return HttpResponse.json(
+                { error: 'Project not found' },
+                { status: 404 }
+            );
+        }
+
+        // Generate mock extraction data based on project schema
+        const extracted_data: Record<string, any> = {};
+
+        if (project.schema && project.schema.length > 0) {
+            project.schema.forEach((field) => {
+                switch (field.type) {
+                    case 'string':
+                        extracted_data[field.key] = `Sample ${field.key.replace(/_/g, ' ')}`;
+                        break;
+                    case 'number':
+                        extracted_data[field.key] = Math.floor(Math.random() * 10000);
+                        break;
+                    case 'date':
+                        extracted_data[field.key] = new Date().toISOString().split('T')[0];
+                        break;
+                    case 'array':
+                        extracted_data[field.key] = ['Item 1', 'Item 2', 'Item 3'];
+                        break;
+                    default:
+                        extracted_data[field.key] = null;
+                }
+            });
+        } else {
+            // Default extraction data if no schema
+            extracted_data.invoice_number = 'INV-2024-001';
+            extracted_data.invoice_date = '2024-12-03';
+            extracted_data.total_amount = '1,250.00';
+            extracted_data.vendor_name = 'Acme Corporation';
+            extracted_data.payment_terms = 'Net 30';
+        }
+
+        // Simulate file upload
+        const file_id = `file-${Date.now()}`;
+
+        return HttpResponse.json({
+            file_id,
+            extraction_result: {
+                status: 'completed',
+                extracted_data,
+            },
+        });
+    }),
+
+    // Playground - Download file
+    http.get('/api/playground/download/:file_id', async ({ params, request }) => {
+        await delay(NETWORK_DELAY);
+
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader || !currentToken) {
+            return HttpResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401 }
+            );
+        }
+
+        // Return a mock PDF blob
+        const mockPdfContent = new Blob(['Mock PDF content for file ' + params.file_id], {
+            type: 'application/pdf',
+        });
+
+        return new HttpResponse(mockPdfContent, {
+            headers: {
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': `attachment; filename=document-${params.file_id}.pdf`,
+            },
+        });
+    }),
 ];

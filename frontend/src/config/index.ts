@@ -8,6 +8,7 @@ export const config = {
     useMockApi: import.meta.env.VITE_USE_MOCK_API === 'true', // Global toggle (legacy)
     useMockAuth: import.meta.env.VITE_USE_MOCK_AUTH === 'true', // Mock auth APIs
     useMockProjects: import.meta.env.VITE_USE_MOCK_PROJECTS === 'true', // Mock project APIs
+    useMockPlayground: import.meta.env.VITE_USE_MOCK_PLAYGROUND === 'true', // Mock playground APIs
 } as const;
 
 export default config;
