@@ -27,24 +27,34 @@ def get_service(
 ):
     return PlaygroundService(fs, projects, extractions)
 
-@router.post("/upload", response_model=FileUploadResponse)
-async def upload_document(
+
+@router.post("/extract")
+async def upload_and_extract(
     project_id: str = Form(...),
+    document_type: str = Form(...),
     file: UploadFile = File(...),
     service: PlaygroundService = Depends(get_service)
 ):
-    return await service.upload_file(project_id, file)
-
-@router.post("/extract", response_model=ExtractionResponse)
-async def run_extraction(
-    req: ExtractionRequest,
-    service: PlaygroundService = Depends(get_service)
-):
-    return await service.run_extraction(
-        project_id=req.project_id,
-        document_type=req.document_type,
-        file_id=req.file_id
+    # Step 1: Upload the file
+    upload_result = await service.upload_file(project_id, file)
+    file_id = upload_result["file_id"]
+    # Step 2: Run extraction
+    extraction_full = await service.run_extraction(
+        project_id=project_id,
+        document_type=document_type,
+        file_id=file_id
     )
+    # Build trimmed extraction result
+    extraction_result = {
+        "status": extraction_full.get("status"),
+        "extracted_data": extraction_full.get("extracted_data")
+    }
+    # Step 3: Return only what you want
+    return {
+        "file_id": file_id,
+        "extraction_result": extraction_result
+    }
+
 
 
 @router.get("/download/{file_id}")
@@ -57,48 +67,48 @@ async def download_file(file_id: str, service: PlaygroundService = Depends(get_s
         headers={"Content-Disposition": f"attachment; filename={grid_out.filename}"}
     )
 
-@router.get("/history/project/{project_id}")
-async def history_project(project_id: str, service: PlaygroundService = Depends(get_service)):
-    return await service.get_history_by_project(project_id)
+# @router.get("/history/project/{project_id}")
+# async def history_project(project_id: str, service: PlaygroundService = Depends(get_service)):
+#     return await service.get_history_by_project(project_id)
 
-@router.get("/history/file/{file_id}")
-async def history_file(file_id: str, service: PlaygroundService = Depends(get_service)):
-    return await service.get_history_by_file(file_id)
-
-
-@router.get("/download/extracted/{file_id}")
-async def download_extracted_json(file_id: str, service: PlaygroundService = Depends(get_service)):
-
-    print("\n==================== DOWNLOAD DEBUG ====================")
-    print("file_id received:", file_id)
-
-    record = await service.extractions.find_one({"file_id": str(file_id)})
-
-    print("MongoDB record fetched:", record)
-
-    if not record:
-        print("⚠️ NO RECORD FOUND FOR file_id:", file_id)
-        raise HTTPException(status_code=404, detail="No extracted data found for this file_id")
-
-    extracted_json = record.get("result")
-    print("extracted_json:", extracted_json)
-
-    # If result unexpectedly None or {}, flag it
-    if extracted_json is None:
-        print("❌ ERROR: record['result'] is None")
-    if extracted_json == {}:
-        print("❌ ERROR: record['result'] is EMPTY {}")
-
-    json_filename = f"extracted_{file_id}.json"
-    json_path = os.path.join(SAVE_DIR, json_filename)
-
-    # 3. Save file permanently
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(extracted_json, f, indent=4)
+# @router.get("/history/file/{file_id}")
+# async def history_file(file_id: str, service: PlaygroundService = Depends(get_service)):
+#     return await service.get_history_by_file(file_id)
 
 
-    return FileResponse(
-        json_path,
-        media_type="application/json",
-        filename=json_filename
-    )
+# @router.get("/download/extracted/{file_id}")
+# async def download_extracted_json(file_id: str, service: PlaygroundService = Depends(get_service)):
+
+#     print("\n==================== DOWNLOAD DEBUG ====================")
+#     print("file_id received:", file_id)
+
+#     record = await service.extractions.find_one({"file_id": str(file_id)})
+
+#     print("MongoDB record fetched:", record)
+
+#     if not record:
+#         print("⚠️ NO RECORD FOUND FOR file_id:", file_id)
+#         raise HTTPException(status_code=404, detail="No extracted data found for this file_id")
+
+#     extracted_json = record.get("result")
+#     print("extracted_json:", extracted_json)
+
+#     # If result unexpectedly None or {}, flag it
+#     if extracted_json is None:
+#         print("❌ ERROR: record['result'] is None")
+#     if extracted_json == {}:
+#         print("❌ ERROR: record['result'] is EMPTY {}")
+
+#     json_filename = f"extracted_{file_id}.json"
+#     json_path = os.path.join(SAVE_DIR, json_filename)
+
+#     # 3. Save file permanently
+#     with open(json_path, "w", encoding="utf-8") as f:
+#         json.dump(extracted_json, f, indent=4)
+
+
+#     return FileResponse(
+#         json_path,
+#         media_type="application/json",
+#         filename=json_filename
+#     )
