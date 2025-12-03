@@ -429,3 +429,22 @@ Rules:
 
     async def get_history_by_file(self, file_id: str):
         return await self.extractions.find({"file_id": file_id}).to_list(1000)
+    
+    async def get_extraction_details(self, file_id: str):
+
+        # Fetch record by file_id
+        record = await self.extractions.find_one({"file_id": file_id})
+
+        if not record:
+            raise HTTPException(status_code=404, detail="Extraction result not found")
+
+        # Extract only what you need
+        extraction_result = {
+            "status": "success",    # Since your DB does not store status
+            "extracted_data": record.get("result")  # <-- Correct field
+        }
+
+        return {
+            #"file_id": file_id,
+            "extraction_result": extraction_result
+        }
