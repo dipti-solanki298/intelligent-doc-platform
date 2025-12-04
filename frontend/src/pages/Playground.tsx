@@ -96,12 +96,19 @@ const Playground = () => {
                 const projectData = projects.find((p) => p.id === selectedProject);
                 const documentType = projectData?.documentType || 'PDF';
 
+                console.log('🚀 Starting real backend extraction:');
+                console.log('  - Project ID:', selectedProject);
+                console.log('  - Document Type:', documentType);
+                console.log('  - File:', singleFile.name, singleFile.size, 'bytes');
+
                 // Build FormData for backend
                 const formData = buildPlaygroundExtractionFormData(
                     selectedProject,
                     documentType,
                     singleFile
                 );
+
+                console.log('  - FormData built, calling /playground/extract...');
 
                 // Call combined upload + extract endpoint
                 const response = await apiClient.post('/playground/extract', formData, {
@@ -110,8 +117,12 @@ const Playground = () => {
                     },
                 });
 
+                console.log('✅ Backend response received:', response.data);
+
                 // Map backend response to frontend format
                 const extractedFields = mapBackendExtractionToFrontend(response.data);
+
+                console.log('✅ Mapped to', extractedFields.length, 'fields');
 
                 setUploadedDocumentId(response.data.file_id);
                 setFileUrl(URL.createObjectURL(singleFile));
@@ -123,11 +134,17 @@ const Playground = () => {
             }
 
         } catch (error: any) {
+            console.error('❌ Extraction failed:', error);
+            console.error('  - Status:', error.response?.status);
+            console.error('  - Data:', error.response?.data);
+            console.error('  - Message:', error.message);
+
             setIsUploading(false);
             setIsExtracting(false);
             const errorMessage =
                 error.response?.data?.error ||
                 error.response?.data?.detail ||
+                error.message ||
                 'Extraction failed';
             toast.error(errorMessage);
         }
