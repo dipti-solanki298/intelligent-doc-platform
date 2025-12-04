@@ -18,12 +18,15 @@ from app.services.qdrant_service import QdrantVector
 from app.services.chroma_service import ChromaVector
 from app.services.faiss_service import FaissVector
 from app.core.config import OPENROUTER_API_KEY, OPENROUTER_MODEL
-from app.routers.projects import PROJECT_BASE_PATH
 
 # Separate model for OCR (Gemma-3 vision model)
 OCR_MODEL_NAME = "google/gemma-3-12b-it:free"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 class PlaygroundService:
 
@@ -31,27 +34,6 @@ class PlaygroundService:
         self.fs = fs_bucket
         self.projects = projects_collection
         self.extractions = extractions_collection
-
-    async def _get_project_folder(self, project_id: str):
-    # Fetch project from DB
-        project = await self.projects.find_one({"_id": ObjectId(project_id)})
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-        project_name = project.get("project_name")
-        if not project_name:
-            raise HTTPException(status_code=500, detail="project_name missing in DB")
-
-        # Construct folder path (no DB storage required)
-        project_folder = os.path.join(PROJECT_BASE_PATH, project_name)
-        # Ensure folder exists
-        if not os.path.exists(project_folder):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Project folder does not exist: {project_folder}"
-            )
-
-        return project_folder
 
     async def upload_file(self, project_id: str, file: UploadFile):
         # 1) Read file bytes
@@ -62,32 +44,20 @@ class PlaygroundService:
             file.filename,
             file_bytes,
             metadata={
-                "project_id": project_id,
-                "content_type": file.content_type,
-                "size": len(file_bytes),
-            }
-        )
+                    "project_id": project_id,
+                    "content_type": file.content_type,
+                    "size": len(file_bytes),
+                }
+            )
 
-        # 3) Get project’s local folder
-        project_folder = await self._get_project_folder(project_id)
-
-        # 4) Save locally
-        local_path = os.path.join(project_folder, file.filename)
-        try:
-            with open(local_path, "wb") as f:
-                f.write(file_bytes)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Saving file failed: {str(e)}")
-
-        # 5) Return success result
+            # 3) Return response (no local saving)
         return {
-            "status": "success",
-            "file_id": str(grid_in),
-            "filename": file.filename,
-            "saved_path": local_path.replace("\\", "/"),
-            "content_type": file.content_type,
-            "size": len(file_bytes)
-        }
+                "status": "success",
+                "file_id": str(grid_in),
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "size": len(file_bytes)
+            }
 
     async def _read_file_from_gridfs(self, file_id: str):
         try:
@@ -365,7 +335,7 @@ Rules:
         }
 
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(120.0, connect=20.0)
+            timeout=httpx.Timeout(300.0, connect=60.0,read=300.0, write=60.0)
         ) as client:
             response = await client.post(url, json=payload, headers=headers)
 

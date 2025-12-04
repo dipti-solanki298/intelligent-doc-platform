@@ -8,6 +8,11 @@ import { ExtractedField } from '@/components/ExtractionEditor';
 import { useProjectStore } from '@/stores/useProjectStore';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
+import { config } from '@/config';
+import {
+    mapBackendExtractionToFrontend,
+    buildPlaygroundExtractionFormData,
+} from '@/lib/api-adapters/playground-adapter';
 
 const Playground = () => {
     const { projects, fetchProjects, isLoading: projectsLoading } = useProjectStore();
@@ -41,49 +46,90 @@ const Playground = () => {
         if (!singleFile || !selectedProject) return;
 
         try {
-            // Step 1: Upload document
-            setIsUploading(true);
-            const formData = new FormData();
-            formData.append('file', singleFile);
-            formData.append('projectId', selectedProject);
+            if (config.useMockPlayground) {
+                // ========== MOCK API FLOW ==========
+                // Step 1: Upload document
+                setIsUploading(true);
+                const formData = new FormData();
+                formData.append('file', singleFile);
+                formData.append('projectId', selectedProject);
 
-            const uploadResponse = await apiClient.post('/documents/upload', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+                const uploadResponse = await apiClient.post('/documents/upload', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
 
-            const documentId = uploadResponse.data.id;
-            setUploadedDocumentId(documentId);
-            setFileUrl(URL.createObjectURL(singleFile));
-            toast.success('Document uploaded successfully!');
-            setIsUploading(false);
+                const documentId = uploadResponse.data.id;
+                setUploadedDocumentId(documentId);
+                setFileUrl(URL.createObjectURL(singleFile));
+                toast.success('Document uploaded successfully!');
+                setIsUploading(false);
 
-            // Step 2: Start extraction
-            setIsExtracting(true);
-            const extractionResponse = await apiClient.post(`/documents/${documentId}/extract`, {
-                projectId: selectedProject,
-            });
+                // Step 2: Start extraction
+                setIsExtracting(true);
+                const extractionResponse = await apiClient.post(`/documents/${documentId}/extract`, {
+                    projectId: selectedProject,
+                });
 
-            // Step 3: Convert extraction results to ExtractedField format
-            const results = extractionResponse.data.results;
-            const extractedFields: ExtractedField[] = Object.entries(results).map(([key, value], index) => ({
-                id: String(index + 1),
-                key: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                value: String(value),
-                confidence: extractionResponse.data.confidence || 0.85,
-                pageRef: 1,
-            }));
+                // Step 3: Convert extraction results to ExtractedField format
+                const results = extractionResponse.data.results;
+                const extractedFields: ExtractedField[] = Object.entries(results).map(([key, value], index) => ({
+                    id: String(index + 1),
+                    key: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    value: String(value),
+                    confidence: extractionResponse.data.confidence || 0.85,
+                    pageRef: 1,
+                }));
 
-            setExtractionData(extractedFields);
-            setIsExtracting(false);
-            setIsCompareModalOpen(true);
-            toast.success('Extraction completed successfully!');
+                setExtractionData(extractedFields);
+                setIsExtracting(false);
+                setIsCompareModalOpen(true);
+                toast.success('Extraction completed successfully!');
+
+            } else {
+                // ========== REAL BACKEND FLOW ==========
+                setIsUploading(true);
+                setIsExtracting(true);
+
+                // Get project data to extract document type
+                const projectData = projects.find((p) => p.id === selectedProject);
+                const documentType = projectData?.documentType || 'PDF';
+
+                // Build FormData for backend
+                const formData = buildPlaygroundExtractionFormData(
+                    selectedProject,
+                    documentType,
+                    singleFile
+                );
+
+                // Call combined upload + extract endpoint
+                const response = await apiClient.post('/playground/extract', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
+
+                // Map backend response to frontend format
+                const extractedFields = mapBackendExtractionToFrontend(response.data);
+
+                setUploadedDocumentId(response.data.file_id);
+                setFileUrl(URL.createObjectURL(singleFile));
+                setExtractionData(extractedFields);
+                setIsUploading(false);
+                setIsExtracting(false);
+                setIsCompareModalOpen(true);
+                toast.success('Extraction completed successfully!');
+            }
 
         } catch (error: any) {
             setIsUploading(false);
             setIsExtracting(false);
-            toast.error(error.response?.data?.error || 'Extraction failed');
+            const errorMessage =
+                error.response?.data?.error ||
+                error.response?.data?.detail ||
+                'Extraction failed';
+            toast.error(errorMessage);
         }
     };
 
