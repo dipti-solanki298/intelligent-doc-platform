@@ -89,8 +89,6 @@ async def create_project(
 
     return Project(**project_data)
 
-
-
 @router.get("/projects", response_model=list[Project])
 async def get_projects():
     items = []
@@ -110,8 +108,6 @@ async def get_project(project_id: str):
     doc["id"] = str(doc["_id"])
     del doc["_id"]
     return Project(**doc)
-
-
 
 @router.put("/projects/{project_id}", response_model=Project)
 async def update_project(
