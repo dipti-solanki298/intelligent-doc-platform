@@ -57,6 +57,14 @@ async def upload_and_extract(
         "extraction_result": extraction_result
     }
 
+@router.get("/extract/{file_id}")
+async def get_extraction_details(
+    file_id: str,
+    service: PlaygroundService = Depends(get_service)
+):
+    return await service.get_extraction_details(file_id)
+
+
 @router.get("/download/{file_id}")
 async def download_file(file_id: str, service: PlaygroundService = Depends(get_service)):
     grid_out, data = await service.download_file(file_id)
@@ -66,13 +74,6 @@ async def download_file(file_id: str, service: PlaygroundService = Depends(get_s
         media_type=grid_out.metadata.get("content_type", "application/octet-stream"),
         headers={"Content-Disposition": f"attachment; filename={grid_out.filename}"}
     )
-
-@router.get("/extract/{file_id}")
-async def get_extraction_details(
-    file_id: str,
-    service: PlaygroundService = Depends(get_service)
-):
-    return await service.get_extraction_details(file_id)
 
 # @router.get("/history/project/{project_id}")
 # async def history_project(project_id: str, service: PlaygroundService = Depends(get_service)):
