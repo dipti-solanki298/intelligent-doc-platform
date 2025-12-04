@@ -27,7 +27,6 @@ def get_service(
 ):
     return PlaygroundService(fs, projects, extractions)
 
-
 @router.post("/extract")
 async def upload_and_extract(
     project_id: str = Form(...),
@@ -38,23 +37,32 @@ async def upload_and_extract(
     # Step 1: Upload the file
     upload_result = await service.upload_file(project_id, file)
     file_id = upload_result["file_id"]
+
     # Step 2: Run extraction
     extraction_full = await service.run_extraction(
         project_id=project_id,
         document_type=document_type,
         file_id=file_id
     )
+
     # Build trimmed extraction result
     extraction_result = {
         "status": extraction_full.get("status"),
         "extracted_data": extraction_full.get("extracted_data")
     }
+
     # Step 3: Return only what you want
     return {
         "file_id": file_id,
         "extraction_result": extraction_result
     }
 
+@router.get("/extract/{file_id}")
+async def get_extraction_details(
+    file_id: str,
+    service: PlaygroundService = Depends(get_service)
+):
+    return await service.get_extraction_details(file_id)
 
 
 @router.get("/download/{file_id}")
