@@ -61,8 +61,8 @@ backend/IDP Platform/.mypy_cache/
 backend/IDP Platform/.ruff_cache/
 
 # Environment & config
-backend/IDP Platform/.env
-backend/IDP Platform/.env.*
+#backend/IDP Platform/.env
+#backend/IDP Platform/.env.*
 
 # Build output
 backend/IDP Platform/build/
