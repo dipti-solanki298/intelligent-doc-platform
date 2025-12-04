@@ -901,30 +901,46 @@ export function getHandlers() {
     console.log('  - Mock Playground:', useMockPlayground);
 
     // Filter handlers based on configuration
-    return handlers.filter((handler) => {
-        const url = (handler as any).info?.path || '';
+    const filteredHandlers = handlers.filter((handler) => {
+        // Get the path from the handler - MSW stores it in different places depending on version
+        const handlerInfo = (handler as any).info || {};
+        const path = handlerInfo.path || handlerInfo.header || '';
 
-        // Auth endpoints (always mock if useMockAuth is true)
-        if (url.includes('/auth/')) {
-            return useMockAuth;
+        console.log('🔍 Checking handler:', path);
+
+        // Auth endpoints
+        if (path.includes('/auth/') || path.includes('/api/auth/')) {
+            const shouldMock = useMockAuth;
+            console.log(`  → Auth endpoint: ${shouldMock ? 'MOCKED' : 'BYPASSED'}`);
+            return shouldMock;
         }
 
-        // Project endpoints
-        if (url.includes('/projects')) {
-            return useMockProjects;
-        }
-
-        // Playground endpoints
-        if (url.includes('/playground/')) {
-            return useMockPlayground;
+        // Playground endpoints (check before documents to be more specific)
+        if (path.includes('/playground/') || path.includes('/api/playground/')) {
+            const shouldMock = useMockPlayground;
+            console.log(`  → Playground endpoint: ${shouldMock ? 'MOCKED' : 'BYPASSED'}`);
+            return shouldMock;
         }
 
         // Document endpoints (used by playground mock flow)
-        if (url.includes('/documents/')) {
-            return useMockPlayground;
+        if (path.includes('/documents/') || path.includes('/api/documents/')) {
+            const shouldMock = useMockPlayground;
+            console.log(`  → Document endpoint: ${shouldMock ? 'MOCKED' : 'BYPASSED'}`);
+            return shouldMock;
+        }
+
+        // Project endpoints
+        if (path.includes('/projects') || path.includes('/api/projects')) {
+            const shouldMock = useMockProjects;
+            console.log(`  → Project endpoint: ${shouldMock ? 'MOCKED' : 'BYPASSED'}`);
+            return shouldMock;
         }
 
         // Other endpoints (LLM, settings, integrations, etc.) - always mock
+        console.log(`  → Other endpoint: MOCKED (default)`);
         return true;
     });
+
+    console.log(`✅ Registered ${filteredHandlers.length} out of ${handlers.length} handlers`);
+    return filteredHandlers;
 }
