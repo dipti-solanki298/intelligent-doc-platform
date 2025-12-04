@@ -885,3 +885,46 @@ export const handlers = [
         });
     }),
 ];
+
+/**
+ * Get handlers based on environment configuration
+ * Only returns handlers for endpoints that should be mocked
+ */
+export function getHandlers() {
+    const useMockAuth = import.meta.env.VITE_USE_MOCK_AUTH === 'true';
+    const useMockProjects = import.meta.env.VITE_USE_MOCK_PROJECTS === 'true';
+    const useMockPlayground = import.meta.env.VITE_USE_MOCK_PLAYGROUND === 'true';
+
+    console.log('🔧 MSW Handler Configuration:');
+    console.log('  - Mock Auth:', useMockAuth);
+    console.log('  - Mock Projects:', useMockProjects);
+    console.log('  - Mock Playground:', useMockPlayground);
+
+    // Filter handlers based on configuration
+    return handlers.filter((handler) => {
+        const url = (handler as any).info?.path || '';
+
+        // Auth endpoints (always mock if useMockAuth is true)
+        if (url.includes('/auth/')) {
+            return useMockAuth;
+        }
+
+        // Project endpoints
+        if (url.includes('/projects')) {
+            return useMockProjects;
+        }
+
+        // Playground endpoints
+        if (url.includes('/playground/')) {
+            return useMockPlayground;
+        }
+
+        // Document endpoints (used by playground mock flow)
+        if (url.includes('/documents/')) {
+            return useMockPlayground;
+        }
+
+        // Other endpoints (LLM, settings, integrations, etc.) - always mock
+        return true;
+    });
+}
