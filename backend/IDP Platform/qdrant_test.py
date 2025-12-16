@@ -86,21 +86,101 @@
 
 
 
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
  
-# You can change this to other BGE models (see list below)
-MODEL_NAME = "BAAI/bge-small-en-v1.5"
+# # You can change this to other BGE models (see list below)
+# MODEL_NAME = "BAAI/bge-small-en-v1.5"
  
-# Load the model
-model = SentenceTransformer(MODEL_NAME)
+# # Load the model
+# model = SentenceTransformer(MODEL_NAME)
  
-texts = [
-    "This is a test sentence.",
-    "BAAI BGE models are useful for embeddings.",
-]
+# texts = [
+#     "This is a test sentence.",
+#     "BAAI BGE models are useful for embeddings.",
+# ]
  
-# Get embeddings (shape: [num_texts, dim])
-embeddings = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+# # Get embeddings (shape: [num_texts, dim])
+# embeddings = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
  
-print("Embeddings shape:", embeddings.shape)
-print("First embedding (first 5 dims):", embeddings[0][:5])
+# print("Embeddings shape:", embeddings.shape)
+# print("First embedding (first 5 dims):", embeddings[0][:5])
+
+
+
+import requests
+import os
+import json
+ 
+API_KEY = "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"
+URL = "https://openrouter.ai/api/v1/chat/completions"
+ 
+user_prompt = """
+I want bill number, bill date,
+customer id, vendor name, total amount and currency
+"""
+ 
+payload = {
+    "model": "z-ai/glm-4.5-air:free",
+    "messages": [
+        {
+            "role": "system",
+            "content": (
+                "Understand the context clearly and identifiy the feilds in given text"
+                "You generate JSON objects only.\n"
+                "Do NOT use markdown, code blocks, or explanations.\n"
+                "Output must start with { and end with }.\n"
+               
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                "From the following request, identify the fields and return a JSON object.\n"
+                "User request:\n"
+                f"{user_prompt}"
+            )
+        }
+    ],
+    "max_tokens": 2000,
+    "temperature": 0,
+    "stop": ["```"]
+}
+ 
+ 
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json",
+    "HTTP-Referer": "http://localhost",
+    "X-Title": "Prompt to JSON Schema"
+}
+ 
+response = requests.post(URL, json=payload, headers=headers)
+data = response.json()
+ 
+content = data.get("choices", [{}])[0].get("message", {}).get("content")
+ 
+print("OUTPUT JSON:")
+ 
+import re
+import json
+ 
+def safe_json_parse(text):
+    if not text:
+        return {}
+ 
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return {}
+ 
+    try:
+        return json.loads(match.group())
+    except json.JSONDecodeError:
+        return {}
+ 
+parsed = safe_json_parse(content)
+print(parsed)
+ 
+# print(content)
+# print(json.loads(content))
+ 
+ 

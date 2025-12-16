@@ -16,6 +16,7 @@ print("mongoDB connected ", client)
 db = client["idp_db"]         # database name
 projects_collection = db["projects"]   # collection name
 extractions_collection = db["extractions"]
+node_collection = db["node_extractions"]
 
 # GridFS bucket for file storage
 fs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="documents")

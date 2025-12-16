@@ -88,34 +88,6 @@ def init_qdrant():
         )
     return client
 
-# ======================================================================
-# PAGE-LEVEL EXTRACTION FOR LARGE PDFs
-# ======================================================================
-# def extract_pdf_pages_for_rag(pdf_path):
-#     reader = PdfReader(pdf_path)
-#     docs = []
-#     metadata = []
-#     file_id = str(uuid4())
-
-#     file_name = os.path.basename(pdf_path)
-#     abs_path = os.path.abspath(pdf_path)
-
-#     for page_num, page in enumerate(reader.pages, start=1):
-#         text = page.extract_text() or ""
-#         text = text.strip()
-#         if not text:
-#             continue
-
-#         docs.append(text)
-#         metadata.append({
-#             "file_id": file_id,
-#             "file_name": file_name,
-#             "page_num": page_num,
-#             "path": abs_path
-#         })
-
-#     return docs, metadata, file_id
-
 def extract_pdf_pages_for_rag(pdf_path):
     reader = PdfReader(pdf_path)
     docs = []
@@ -163,7 +135,6 @@ def extract_pdf_pages_for_rag(pdf_path):
 
     doc_mupdf.close()
     return docs, metadata, file_id
-
 
 # ======================================================================
 # INDEX LARGE PDF INTO QDRANT
