@@ -19,8 +19,15 @@ import { toast } from 'sonner';
 import PipelineSidebar from '@/components/pipeline/PipelineSidebar';
 import { CustomNode } from '@/components/pipeline/CustomNodes';
 import NodeConfigPanel from '@/components/pipeline/NodeConfigPanel';
-import DocumentCompare from '@/pages/DocumentCompare';
-import { X, FileText } from 'lucide-react';
+import DocumentCompareModal from '@/components/DocumentCompareModal';
+import { ExtractedField } from '@/components/ExtractionEditor';
+import { useProjectStore } from '@/stores/useProjectStore';
+import apiClient from '@/lib/api-client';
+import { config } from '@/config';
+import {
+    mapBackendExtractionToFrontend,
+    buildPlaygroundExtractionFormData,
+} from '@/lib/api-adapters/playground-adapter';
 
 const nodeTypes = {
     custom: CustomNode,
@@ -36,6 +43,13 @@ const PipelineBuilderContent = () => {
     const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
     const [isCompareOpen, setIsCompareOpen] = useState(false);
+
+    // Extraction result state for DocumentCompareModal
+    const [extractionData, setExtractionData] = useState<ExtractedField[]>([]);
+    const [extractionFileUrl, setExtractionFileUrl] = useState<string>('');
+    const [extractionFileName, setExtractionFileName] = useState<string>('');
+
+    const { projects } = useProjectStore();
 
     const onConnect = useCallback(
         (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -116,31 +130,182 @@ const PipelineBuilderContent = () => {
         toast.success('Pipeline saved successfully');
     };
 
+    // Execute extraction for a single invoice/document AI node
+    const executeInvoiceExtraction = async (nodeId: string): Promise<boolean> => {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return false;
+
+        const { selectedProject, uploadedFile, fileName, fileUrl } = node.data;
+
+        if (!selectedProject || !uploadedFile) {
+            toast.error('Please select a project and upload a file');
+            return false;
+        }
+
+        // Get project data
+        const projectData = projects.find((p) => p.id === selectedProject);
+        const documentType = projectData?.documentType || 'PDF';
+
+        try {
+            if (config.useMockPlayground) {
+                // ========== MOCK API FLOW ==========
+                // Step 1: Upload document
+                const formData = new FormData();
+                formData.append('file', uploadedFile);
+                formData.append('projectId', selectedProject);
+
+                const uploadResponse = await apiClient.post('/documents/upload', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
+
+                const documentId = uploadResponse.data.id;
+
+                // Step 2: Start extraction
+                const extractionResponse = await apiClient.post(`/documents/${documentId}/extract`, {
+                    projectId: selectedProject,
+                });
+
+                // Step 3: Convert extraction results to ExtractedField format
+                const results = extractionResponse.data.results;
+                const extractedFields: ExtractedField[] = Object.entries(results).map(([key, value], index) => ({
+                    id: String(index + 1),
+                    key: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    value: String(value),
+                    confidence: extractionResponse.data.confidence || 0.85,
+                    pageRef: 1,
+                }));
+
+                // Store results in node data
+                updateNodeData(nodeId, {
+                    extractionResult: extractedFields,
+                    status: 'success',
+                });
+
+                return true;
+
+            } else {
+                // ========== REAL BACKEND FLOW ==========
+                console.log('🚀 Starting real backend extraction for node:', nodeId);
+                console.log('  - Project ID:', selectedProject);
+                console.log('  - Document Type:', documentType);
+                console.log('  - File:', fileName);
+
+                // Build FormData for backend
+                const formData = buildPlaygroundExtractionFormData(
+                    selectedProject,
+                    documentType,
+                    uploadedFile
+                );
+
+                console.log('  - FormData built, calling /playground/extract...');
+
+                // Call combined upload + extract endpoint
+                const response = await apiClient.post('/playground/extract', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                });
+
+                console.log('✅ Backend response received:', response.data);
+
+                // Map backend response to frontend format
+                const extractedFields = mapBackendExtractionToFrontend(response.data);
+
+                console.log('✅ Mapped to', extractedFields.length, 'fields');
+
+                // Store results in node data
+                updateNodeData(nodeId, {
+                    extractionResult: extractedFields,
+                    status: 'success',
+                });
+
+                return true;
+            }
+
+        } catch (error: any) {
+            console.error('❌ Extraction failed:', error);
+            const errorMessage =
+                error.response?.data?.error ||
+                error.response?.data?.detail ||
+                error.message ||
+                'Extraction failed';
+
+            updateNodeData(nodeId, {
+                status: 'error',
+                errorMessage: errorMessage,
+            });
+
+            return false;
+        }
+    };
+
+    // Handle Run Extraction from NodeConfigPanel
+    const handleRunExtraction = async (nodeId: string) => {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        // Set running status
+        updateNodeData(nodeId, { status: 'running' });
+        toast.info('Starting extraction...');
+
+        const success = await executeInvoiceExtraction(nodeId);
+
+        if (success) {
+            toast.success('Extraction completed successfully!');
+
+            // Open the compare modal to show results
+            const updatedNode = nodes.find(n => n.id === nodeId);
+            if (updatedNode?.data.extractionResult) {
+                setExtractionData(updatedNode.data.extractionResult);
+                setExtractionFileUrl(updatedNode.data.fileUrl || '');
+                setExtractionFileName(updatedNode.data.fileName || 'document.pdf');
+                setIsCompareOpen(true);
+            }
+        } else {
+            toast.error('Extraction failed. Check node for details.');
+        }
+    };
+
     const handleRun = async () => {
         toast.info('Starting pipeline execution...');
 
         // Reset statuses
         setNodes((nds) => nds.map(n => ({ ...n, data: { ...n.data, status: 'idle' } })));
 
-        // Simulate execution
+        // Execute nodes in order
         for (const node of nodes) {
+            const isDocumentAI = ['invoice', 'contract', 'bank_statement'].includes(node.data.type);
+
             // Set running
             updateNodeData(node.id, { status: 'running' });
 
-            await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate work
+            if (isDocumentAI) {
+                // Run actual extraction for document AI nodes
+                const success = await executeInvoiceExtraction(node.id);
 
-            // Random failure for demonstration
-            const isSuccess = Math.random() > 0.2;
-
-            if (isSuccess) {
-                updateNodeData(node.id, { status: 'success' });
+                if (!success) {
+                    toast.error(`Pipeline failed at node: ${node.data.label}`);
+                    break;
+                }
             } else {
-                updateNodeData(node.id, {
-                    status: 'error',
-                    errorMessage: 'Connection timeout: Failed to reach external service.'
-                });
-                toast.error(`Pipeline failed at node: ${node.data.label}`);
-                break; // Stop execution on failure
+                // Simulate work for other node types
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                // Random failure for demonstration (for non-document nodes)
+                const isSuccess = Math.random() > 0.2;
+
+                if (isSuccess) {
+                    updateNodeData(node.id, { status: 'success' });
+                } else {
+                    updateNodeData(node.id, {
+                        status: 'error',
+                        errorMessage: 'Connection timeout: Failed to reach external service.'
+                    });
+                    toast.error(`Pipeline failed at node: ${node.data.label}`);
+                    break;
+                }
             }
         }
 
@@ -161,27 +326,40 @@ const PipelineBuilderContent = () => {
     };
 
     const handleOpenCompare = () => {
+        // If there's a selected node with extraction results, use those
+        if (selectedNode?.data.extractionResult) {
+            setExtractionData(selectedNode.data.extractionResult);
+            setExtractionFileUrl(selectedNode.data.fileUrl || '');
+            setExtractionFileName(selectedNode.data.fileName || 'document.pdf');
+        }
         setIsCompareOpen(true);
+    };
+
+    const handleUpdateExtractionField = (id: string, newValue: string) => {
+        setExtractionData(prev =>
+            prev.map(field => field.id === id ? { ...field, value: newValue } : field)
+        );
+
+        // Also update the node data if there's a selected node
+        if (selectedNode) {
+            const updatedExtractionResult = selectedNode.data.extractionResult?.map(
+                (field: ExtractedField) => field.id === id ? { ...field, value: newValue } : field
+            );
+            updateNodeData(selectedNode.id, { extractionResult: updatedExtractionResult });
+        }
     };
 
     return (
         <div className="flex h-screen w-full bg-background relative overflow-hidden">
-            {isCompareOpen && (
-                <div className="absolute inset-0 z-50 bg-background flex flex-col animate-in fade-in duration-200">
-                    <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card">
-                        <div className="font-semibold flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-indigo-500" />
-                            Document Comparison
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={() => setIsCompareOpen(false)}>
-                            <X className="w-5 h-5" />
-                        </Button>
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                        <DocumentCompare />
-                    </div>
-                </div>
-            )}
+            {/* Document Compare Modal */}
+            <DocumentCompareModal
+                isOpen={isCompareOpen}
+                onClose={() => setIsCompareOpen(false)}
+                fileUrl={extractionFileUrl}
+                fileName={extractionFileName}
+                extractionData={extractionData}
+                onUpdateField={handleUpdateExtractionField}
+            />
 
             <PipelineSidebar />
 
@@ -235,6 +413,7 @@ const PipelineBuilderContent = () => {
                     onDelete={deleteNode}
                     onTest={handleTestNode}
                     onOpenCompare={handleOpenCompare}
+                    onRunExtraction={handleRunExtraction}
                 />
             )}
         </div>
